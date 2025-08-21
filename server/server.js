@@ -701,6 +701,20 @@ let needSetup = false;
         socket.on("add", async (monitor, callback) => {
             try {
                 checkLogin(socket);
+
+                // Check credits before creating monitor
+                const Credits = require("./model/credits");
+                const credits = await Credits.getOrCreateForUser(socket.userID);
+                const monitorCost = 10; // Cost in sats per monitor
+
+                if (!credits.hasCredits(monitorCost)) {
+                    return callback({
+                        ok: false,
+                        msg: "Insufficient credits. Please add credits to create monitors.",
+                        msgi18n: false,
+                    });
+                }
+
                 let bean = R.dispense("monitor");
 
                 let notificationIDList = monitor.notificationIDList;
@@ -741,6 +755,11 @@ let needSetup = false;
                 await updateMonitorNotification(bean.id, notificationIDList);
 
                 await server.sendUpdateMonitorIntoList(socket, bean.id);
+
+                // Deduct credits for monitor creation
+                const CreditUsage = require("./model/credit-usage");
+                await credits.deductCredits(monitorCost);
+                await CreditUsage.logUsage(socket.userID, null, bean.id, monitorCost, "monitor_created");
 
                 if (monitor.active !== false) {
                     await startMonitor(socket.userID, bean.id);
@@ -1769,6 +1788,23 @@ async function initDatabase(testMode = false) {
 async function startMonitor(userID, monitorID) {
     await checkOwner(userID, monitorID);
 
+    // Check if monitor is already active
+    let monitor = await R.findOne("monitor", " id = ? ", [monitorID]);
+    if (monitor.active) {
+        log.debug("manage", `Monitor ${monitorID} is already active`);
+        return;
+    }
+
+    // Check credits before starting monitor
+    const Credits = require("./model/credits");
+    const credits = await Credits.getOrCreateForUser(userID);
+    const monitorCost = 10; // Cost in sats per monitor
+
+    if (!credits.hasCredits(monitorCost)) {
+        log.warn("manage", `Insufficient credits to start monitor ${monitorID} for user ${userID}`);
+        throw new Error("Insufficient credits. Please add credits to start monitors.");
+    }
+
     log.info("manage", `Resume Monitor: ${monitorID} User ID: ${userID}`);
 
     await R.exec("UPDATE monitor SET active = 1 WHERE id = ? AND user_id = ? ", [
@@ -1786,6 +1822,11 @@ async function startMonitor(userID, monitorID) {
 
     server.monitorList[monitor.id] = monitor;
     await monitor.start(io);
+
+    // Deduct credits for starting monitor
+    const CreditUsage = require("./model/credit-usage");
+    await credits.deductCredits(monitorCost);
+    await CreditUsage.logUsage(userID, null, monitorID, monitorCost, "monitor_started");
 }
 
 /**

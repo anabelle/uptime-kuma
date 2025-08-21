@@ -1323,6 +1323,21 @@ class Monitor extends BeanModel {
         if (!isFirstBeat || bean.status === DOWN) {
             const notificationList = await Monitor.getNotificationList(monitor);
 
+            if (notificationList.length === 0) {
+                return; // No notifications to send
+            }
+
+            // Check credits before sending notifications
+            const Credits = require("./credits");
+            const credits = await Credits.getOrCreateForUser(monitor.user_id);
+            const alertCost = 1; // Cost in sats per alert
+            const totalCost = notificationList.length * alertCost;
+
+            if (!credits.hasCredits(totalCost)) {
+                log.warn("monitor", `Insufficient credits to send ${notificationList.length} notifications for monitor ${monitor.id}`);
+                return; // Skip sending notifications
+            }
+
             let text;
             if (bean.status === UP) {
                 text = "✅ Up";
@@ -1351,6 +1366,12 @@ class Monitor extends BeanModel {
                     heartbeatJSON["localDateTime"] = dayjs.utc(heartbeatJSON["time"]).tz(heartbeatJSON["timezone"]).format(SQL_DATETIME_FORMAT);
 
                     await Notification.send(JSON.parse(notification.config), msg, monitor.toJSON(preloadData, false), heartbeatJSON);
+
+                    // Deduct credits for each notification sent
+                    const CreditUsage = require("./credit-usage");
+                    await credits.deductCredits(alertCost);
+                    await CreditUsage.logUsage(monitor.user_id, null, monitor.id, alertCost, "alert_sent");
+
                 } catch (e) {
                     log.error("monitor", "Cannot send notification to " + notification.name);
                     log.error("monitor", e);
@@ -1441,14 +1462,33 @@ class Monitor extends BeanModel {
         let sent = false;
         log.debug("monitor", "Send certificate notification");
 
-        for (let notification of notificationList) {
-            try {
-                log.debug("monitor", "Sending to " + notification.name);
-                await Notification.send(JSON.parse(notification.config), `[${this.name}][${this.url}] ${certType} certificate ${certCN} will expire in ${daysRemaining} days`);
-                sent = true;
-            } catch (e) {
-                log.error("monitor", "Cannot send cert notification to " + notification.name);
-                log.error("monitor", e);
+        if (notificationList.length > 0) {
+            // Check credits before sending certificate notifications
+            const Credits = require("./credits");
+            const credits = await Credits.getOrCreateForUser(this.user_id);
+            const alertCost = 1; // Cost in sats per alert
+            const totalCost = notificationList.length * alertCost;
+
+            if (!credits.hasCredits(totalCost)) {
+                log.warn("monitor", `Insufficient credits to send ${notificationList.length} certificate notifications for monitor ${this.id}`);
+                return; // Skip sending notifications
+            }
+
+            for (let notification of notificationList) {
+                try {
+                    log.debug("monitor", "Sending to " + notification.name);
+                    await Notification.send(JSON.parse(notification.config), `[${this.name}][${this.url}] ${certType} certificate ${certCN} will expire in ${daysRemaining} days`);
+                    sent = true;
+
+                    // Deduct credits for each notification sent
+                    const CreditUsage = require("./credit-usage");
+                    await credits.deductCredits(alertCost);
+                    await CreditUsage.logUsage(this.user_id, null, this.id, alertCost, "cert_alert_sent");
+
+                } catch (e) {
+                    log.error("monitor", "Cannot send cert notification to " + notification.name);
+                    log.error("monitor", e);
+                }
             }
         }
 

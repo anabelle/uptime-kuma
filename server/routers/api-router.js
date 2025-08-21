@@ -628,4 +628,214 @@ function determineStatus(status, previousHeartbeat, maxretries, isUpsideDown, be
     }
 }
 
+// Anonymous Session and Credit Management Endpoints
+
+/**
+ * Create anonymous session
+ */
+router.post("/api/anonymous-session", async (request, response) => {
+    try {
+        const AnonymousSession = require("../model/anonymous-session");
+        const userAgent = request.headers['user-agent'];
+        const ipAddress = request.ip || request.connection.remoteAddress;
+
+        const session = await AnonymousSession.create(userAgent, ipAddress);
+
+        response.json({
+            session_id: session.session_id,
+            message: "Anonymous session created successfully"
+        });
+
+    } catch (error) {
+        log.error("api", `Failed to create anonymous session: ${error.message}`);
+        response.status(500).json({
+            error: "Failed to create anonymous session"
+        });
+    }
+});
+
+/**
+ * Get credit balance
+ */
+router.get("/api/credits/balance", async (request, response) => {
+    try {
+        const sessionId = request.query.session_id;
+        const userId = request.query.user_id;
+
+        if (!sessionId && !userId) {
+            return response.status(400).json({
+                error: "Either session_id or user_id is required"
+            });
+        }
+
+        let balance = 0;
+
+        if (sessionId) {
+            const AnonymousSession = require("../model/anonymous-session");
+            const session = await AnonymousSession.findBySessionId(sessionId);
+            if (session) {
+                balance = await session.getBalance();
+                await session.updateLastActive();
+            }
+        } else if (userId) {
+            const Credits = require("../model/credits");
+            const credits = await Credits.getForUser(userId);
+            if (credits) {
+                balance = credits.balance;
+            }
+        }
+
+        response.json({
+            balance: balance,
+            unit: "sats"
+        });
+
+    } catch (error) {
+        log.error("api", `Failed to get credit balance: ${error.message}`);
+        response.status(500).json({
+            error: "Failed to get credit balance"
+        });
+    }
+});
+
+/**
+ * Create Lightning invoice for credits
+ */
+router.post("/api/credits/invoice", async (request, response) => {
+    try {
+        const { amount, session_id, user_id } = request.body;
+
+        if (!amount || amount <= 0) {
+            return response.status(400).json({
+                error: "Valid amount is required"
+            });
+        }
+
+        if (!session_id && !user_id) {
+            return response.status(400).json({
+                error: "Either session_id or user_id is required"
+            });
+        }
+
+        // Create payment record
+        const Payment = require("../model/payment");
+        const payment = await Payment.create(
+            user_id || null,
+            session_id ? (await require("../model/anonymous-session").findBySessionId(session_id))?.id : null,
+            null, // invoice_id will be set after creation
+            amount
+        );
+
+        // Create NakaPay invoice
+        const NakaPayService = require("../nakapay-service");
+        const nakapay = new NakaPayService();
+
+        const callbackUrl = `${request.protocol}://${request.get('host')}/api/credits/webhook`;
+
+        const invoice = await nakapay.createInvoice(
+            amount,
+            `Uptime Kuma Credits - ${amount} sats`,
+            callbackUrl
+        );
+
+        // Update payment with invoice ID
+        payment.invoice_id = invoice.id;
+        await require("redbean-node").store(payment);
+
+        response.json({
+            invoice_id: invoice.id,
+            payment_request: invoice.payment_request,
+            amount: amount,
+            payment_id: payment.id
+        });
+
+    } catch (error) {
+        log.error("api", `Failed to create invoice: ${error.message}`);
+        response.status(500).json({
+            error: "Failed to create invoice"
+        });
+    }
+});
+
+/**
+ * Webhook endpoint for NakaPay payment confirmations
+ */
+router.post("/api/credits/webhook", async (request, response) => {
+    try {
+        const { invoice_id, status } = request.body;
+
+        if (!invoice_id) {
+            return response.status(400).json({
+                error: "Invoice ID is required"
+            });
+        }
+
+        const Payment = require("../model/payment");
+        const payment = await Payment.findByInvoiceId(invoice_id);
+
+        if (!payment) {
+            return response.status(404).json({
+                error: "Payment not found"
+            });
+        }
+
+        if (status === 'paid' && payment.status === 'pending') {
+            await payment.markAsPaid();
+            log.info("api", `Payment confirmed: ${invoice_id} - ${payment.amount} sats`);
+        } else {
+            await payment.updateStatus(status);
+        }
+
+        response.json({
+            message: "Payment status updated"
+        });
+
+    } catch (error) {
+        log.error("api", `Failed to process webhook: ${error.message}`);
+        response.status(500).json({
+            error: "Failed to process webhook"
+        });
+    }
+});
+
+/**
+ * Get credit usage history
+ */
+router.get("/api/credits/history", async (request, response) => {
+    try {
+        const sessionId = request.query.session_id;
+        const userId = request.query.user_id;
+        const limit = parseInt(request.query.limit) || 20;
+
+        if (!sessionId && !userId) {
+            return response.status(400).json({
+                error: "Either session_id or user_id is required"
+            });
+        }
+
+        const CreditUsage = require("../model/credit-usage");
+        let history = [];
+
+        if (sessionId) {
+            const session = await require("../model/anonymous-session").findBySessionId(sessionId);
+            if (session) {
+                history = await CreditUsage.getSessionHistory(session.id, limit);
+                await session.updateLastActive();
+            }
+        } else if (userId) {
+            history = await CreditUsage.getUserHistory(userId, limit);
+        }
+
+        response.json({
+            history: history
+        });
+
+    } catch (error) {
+        log.error("api", `Failed to get credit history: ${error.message}`);
+        response.status(500).json({
+            error: "Failed to get credit history"
+        });
+    }
+});
+
 module.exports = router;
