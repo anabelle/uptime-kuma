@@ -14,7 +14,7 @@ class Payment {
         let payment = R.dispense("payment");
         payment.user_id = userId;
         payment.anonymous_session_id = sessionId;
-        payment.invoice_id = invoiceId;
+        payment.invoice_id = invoiceId || ''; // Provide empty string if null
         payment.amount = amount;
         payment.status = 'pending';
         payment.created_date = R.isoDateTime();

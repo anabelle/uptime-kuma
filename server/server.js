@@ -1812,10 +1812,6 @@ async function startMonitor(userID, monitorID) {
         userID,
     ]);
 
-    let monitor = await R.findOne("monitor", " id = ? ", [
-        monitorID,
-    ]);
-
     if (monitor.id in server.monitorList) {
         await server.monitorList[monitor.id].stop();
     }
