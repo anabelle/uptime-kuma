@@ -6,18 +6,14 @@
                     <router-link to="/add" class="btn btn-primary mb-3"><font-awesome-icon icon="plus" /> {{ $t("Add New Monitor") }}</router-link>
                 </div>
 
-                <!-- Credit Balance Component -->
-                <CreditBalance
-                    :session-id="anonymousSessionId"
-                    :user-id="userId"
-                />
+
 
                 <MonitorList :scrollbar="true" />
             </div>
 
             <div ref="container" class="col-12 col-md-7 col-xl-8 mb-3">
                 <!-- Add :key to disable vue router re-use the same component -->
-                <router-view :key="$route.fullPath" :calculatedHeight="height" />
+                <router-view :key="$route.fullPath" :calculatedHeight="height" :anonymousSessionId="anonymousSessionId" />
             </div>
         </div>
     </div>
@@ -26,12 +22,10 @@
 <script>
 
 import MonitorList from "../components/MonitorList.vue";
-import CreditBalance from "../components/CreditBalance.vue";
 
 export default {
     components: {
         MonitorList,
-        CreditBalance,
     },
     data() {
         return {

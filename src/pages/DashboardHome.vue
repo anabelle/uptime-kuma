@@ -12,6 +12,8 @@
                 class="mb-4"
             />
 
+
+
             <div class="shadow-box big-padding text-center mb-4">
                 <div class="row">
                     <div class="col">
@@ -98,6 +100,7 @@ import Datetime from "../components/Datetime.vue";
 import Pagination from "v-pagination-3";
 import CreditBalance from "../components/CreditBalance.vue";
 
+
 export default {
     components: {
         Datetime,
@@ -109,6 +112,10 @@ export default {
         calculatedHeight: {
             type: Number,
             default: 0
+        },
+        anonymousSessionId: {
+            type: String,
+            default: null
         }
     },
     data() {
