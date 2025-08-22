@@ -158,8 +158,18 @@ export default {
             }
 
             try {
-                socket = io(url);
-                console.log("Attempting to connect to WebSocket:", url);
+                // Prepare authentication data for socket connection
+                const authData = {};
+                const sessionId = localStorage.getItem('anonymous_session_id');
+                if (sessionId) {
+                    authData.anonymousSessionId = sessionId;
+                    console.log("Including anonymous session ID in socket connection:", sessionId);
+                }
+
+                socket = io(url, {
+                    auth: authData
+                });
+                console.log("Attempting to connect to WebSocket:", url, "with auth:", authData);
 
                 socket.on("info", (info) => {
                     this.info = info;
@@ -739,7 +749,26 @@ export default {
             // Add anonymous session ID for anonymous users
             if (!this.loggedIn && this.anonymousSessionId) {
                 monitor.anonymousSessionId = this.anonymousSessionId;
+                console.log("Frontend: Adding anonymous session ID to monitor:", {
+                    anonymousSessionId: this.anonymousSessionId,
+                    monitorData: monitor
+                });
+            } else {
+                console.log("Frontend: Not adding anonymous session ID:", {
+                    loggedIn: this.loggedIn,
+                    anonymousSessionId: this.anonymousSessionId,
+                    currentTime: new Date().toISOString()
+                });
             }
+
+            // Always include the anonymous session ID if available, regardless of login status
+            // This ensures the server can properly identify the user
+            if (this.anonymousSessionId) {
+                monitor.anonymousSessionId = this.anonymousSessionId;
+                console.log("Frontend: Ensuring anonymous session ID is set:", this.anonymousSessionId);
+            }
+
+            console.log("Frontend: Final monitor data being sent:", JSON.stringify(monitor, null, 2));
             socket.emit("add", monitor, callback);
         },
 

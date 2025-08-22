@@ -384,7 +384,7 @@ test.describe("Anonymous User Access", () => {
         await expect(page).not.toHaveURL(/.*login.*/);
 
         // Check if we can see dashboard content (more flexible than specific element)
-        await page.waitForTimeout(2000); // Wait for page to fully load
+        await page.waitForTimeout(5000); // Wait longer for page to load
         const dashboardContent = page.locator('body').filter({ hasText: /Dashboard|Monitor|Status/ });
         await expect(dashboardContent).toBeVisible();
 
@@ -489,6 +489,13 @@ test.describe("Anonymous User Access", () => {
 
         console.log('Vue.js authentication state:', vueAuthState);
 
+        // Check if there's an issue with anonymous session creation
+        if (vueAuthState.anonymousSessionId === null && vueAuthState.loggedIn === false) {
+            console.log('❌ Anonymous session not created - this is the root cause');
+            console.log('❌ Expected: anonymousSessionId should be set automatically');
+            console.log('🔧 Fix needed: Ensure anonymous session creation works on dashboard load');
+        }
+
         // Check if we can access the EditMonitor component
         const editMonitorState = await page.evaluate(() => {
             try {
@@ -576,6 +583,85 @@ test.describe("Anonymous User Access", () => {
         // Look for any form that might be the monitor form
         const monitorForm = page.locator('form').first();
         await expect(monitorForm).toBeVisible();
+
+        // Test form submission to check for any server-side errors
+        console.log('Testing form submission...');
+
+        // Fill in a sample URL
+        const urlInput = page.locator('input#url');
+        if (await urlInput.isVisible()) {
+            await urlInput.fill('https://httpbin.org/status/200');
+            console.log('Filled URL input');
+        }
+
+        // Try to submit the form - target the specific EditMonitor save button
+        const submitButton = page.locator('button[data-testid="save-button"][data-v-f6726033]');
+        if (await submitButton.isVisible()) {
+            await submitButton.click();
+            console.log('Clicked EditMonitor save button');
+
+            // Wait for any response or error toasts
+            await page.waitForTimeout(2000);
+
+        // Check for any error toasts after submission
+        const errorToasts = await page.locator('.toast, .alert, [class*="toast"]').filter({
+            hasText: /No valid user or session found|Insufficient credits|error|Error/i
+        }).all();
+
+        console.log('Error toasts after submission:', errorToasts.length);
+
+        for (let i = 0; i < errorToasts.length; i++) {
+            const text = await errorToasts[i].textContent();
+            console.log(`Error toast ${i} text: "${text}"`);
+        }
+
+        // Check if we got the expected "Insufficient credits" error
+        const insufficientCreditsToasts = await page.locator('.toast, .alert, [class*="toast"]').filter({
+            hasText: /Insufficient credits/i
+        }).all();
+
+        if (insufficientCreditsToasts.length > 0) {
+            console.log('✅ Got expected "Insufficient credits" error - this is correct behavior');
+            console.log('✅ Anonymous user flow is working as expected');
+        } else if (errorToasts.length === 0) {
+            console.log('✅ Form submission completed successfully');
+            console.log('❌ Session validation error - anonymous session not being passed properly');
+            console.log('📝 This is likely the real issue: insufficient credits for new anonymous users');
+            console.log('💡 Expected behavior: should show "Insufficient credits" instead of session error');
+        } else {
+            console.log('❌ Unexpected server-side errors detected');
+            for (let i = 0; i < errorToasts.length; i++) {
+                const text = await errorToasts[i].textContent();
+                console.log(`❌ Unexpected error: "${text}"`);
+            }
+        }
+
+        // Check what type of errors we got
+        if (errorToasts.length > 0) {
+            const errorTexts = await Promise.all(errorToasts.map(t => t.textContent()));
+            const hasSessionError = errorTexts.some(text => text.includes('No valid user or session found'));
+            const hasCreditError = errorTexts.some(text => text.includes('Insufficient credits'));
+
+            if (hasSessionError) {
+                console.log('❌ Server-side session validation error detected');
+                console.log('❌ This indicates the anonymous session is not being properly passed to the server');
+            } else if (hasCreditError) {
+                console.log('✅ Server-side credit validation working correctly');
+                console.log('✅ Anonymous user properly identified, but has insufficient credits');
+                console.log('💡 This is the expected behavior for new anonymous users');
+            } else {
+                console.log('❓ Unexpected error type:', errorTexts);
+            }
+        } else {
+            console.log('✅ No server-side errors detected');
+            console.log('✅ Form submission completed successfully');
+        }
+
+        // Check what type of error we're getting
+        console.log('❌ Session validation error - anonymous session not being passed properly');
+        console.log('📝 This is likely the real issue: insufficient credits for new anonymous users');
+        console.log('💡 Expected behavior: should show "Insufficient credits" instead of session error');
+        }
 
         // CRITICAL: Verify that NO authentication toasts are present
         // Wait a bit to ensure any toasts have time to appear

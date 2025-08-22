@@ -711,24 +711,76 @@ let needSetup = false;
                 }
 
                 // For anonymous users, use session ID as user identifier
-                const effectiveUserId = socket.userID || `anonymous_${monitor.anonymousSessionId || 'unknown'}`;
+                // Check both monitor.anonymousSessionId and socket.anonymousSessionId
+                const sessionId = monitor.anonymousSessionId || socket.anonymousSessionId;
+                const effectiveUserId = socket.userID || `anonymous_${sessionId || 'unknown'}`;
+
+                console.log("=== MONITOR CREATION DEBUG ===");
+                console.log("Full monitor data received:", JSON.stringify(monitor, null, 2));
+                console.log("Socket info:", {
+                    socketUserID: socket.userID,
+                    socketAnonymousSessionId: socket.anonymousSessionId,
+                    socketId: socket.id
+                });
+                console.log("Session resolution:", {
+                    monitorAnonymousSessionId: monitor.anonymousSessionId,
+                    socketAnonymousSessionId: socket.anonymousSessionId,
+                    resolvedSessionId: sessionId,
+                    effectiveUserId: effectiveUserId
+                });
+                console.log("Authentication state:", {
+                    hasSocketUser: !!socket.userID,
+                    hasMonitorSession: !!monitor.anonymousSessionId,
+                    hasSocketSession: !!socket.anonymousSessionId,
+                    finalSessionId: sessionId
+                });
+                console.log("================================");
 
                 // Check credits before creating monitor
                 const Credits = require("./model/credits");
-                let credits;
-                if (socket.userID) {
-                    credits = await Credits.getOrCreateForUser(socket.userID);
-                } else if (monitor.anonymousSessionId) {
-                    credits = await Credits.getOrCreateForSession(monitor.anonymousSessionId);
-                } else {
-                    return callback({
-                        ok: false,
-                        msg: "No valid user or session found.",
-                        msgi18n: false,
-                    });
-                }
+                const AnonymousSession = require("./model/anonymous-session");
+                 let credits;
+                 if (socket.userID) {
+                     credits = await Credits.getOrCreateForUser(socket.userID);
+                 } else if (sessionId) {
+                     // For anonymous sessions, we need to look up the session first
+                     const session = await AnonymousSession.findBySessionId(sessionId);
+                     if (session) {
+                         credits = await AnonymousSession.getCredits(session);
+                     } else {
+                         return callback({
+                             ok: false,
+                             msg: "Invalid anonymous session.",
+                             msgi18n: false,
+                         });
+                     }
+                 } else {
+                     return callback({
+                         ok: false,
+                         msg: "No valid user or session found.",
+                         msgi18n: false,
+                     });
+                 }
+             } catch (error) {
+                 console.error("Error during monitor creation:", error);
+                 return callback({
+                     ok: false,
+                     msg: "An error occurred while creating the monitor.",
+                     msgi18n: false,
+                 });
+             }
 
-                const monitorCost = 10; // Cost in sats per monitor
+             try {
+                 const monitorCost = 10; // Cost in sats per monitor
+
+                // Debug logging to understand what's happening
+                console.log("Monitor creation debug:", {
+                    sessionId: sessionId,
+                    creditsFound: !!credits,
+                    creditsBalance: credits ? credits.balance : 'N/A',
+                    monitorCost: monitorCost,
+                    hasEnoughCredits: credits ? credits.hasCredits(monitorCost) : false
+                });
 
                 if (!credits.hasCredits(monitorCost)) {
                     return callback({
