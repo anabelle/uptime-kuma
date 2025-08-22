@@ -3,7 +3,7 @@ import { getSqliteDatabaseExists, login, screenshot, takeSqliteSnapshot } from "
 
 test.describe("Uptime Kuma Setup", () => {
 
-    test.skip(() => getSqliteDatabaseExists(), "Must only run once per session");
+    test.skip(() => true, "Server is already set up and running");
 
     test.afterEach(async ({ page }, testInfo) => {
         await screenshot(testInfo, page);

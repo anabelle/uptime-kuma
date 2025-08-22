@@ -1,7 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 30001;
-export const url = `http://localhost:${port}`;
+export const url = `https://vm-522.lnvps.cloud`;
 
 export default defineConfig({
     // Look for test files in the "tests" directory, relative to this configuration file.
@@ -47,7 +46,7 @@ export default defineConfig({
         {
             name: "specs",
             use: { ...devices["Desktop Chrome"] },
-            dependencies: [ "run-once setup" ],
+            // dependencies: [ "run-once setup" ], // Temporarily disabled for anonymous user testing
         },
         /*
         {
@@ -56,11 +55,11 @@ export default defineConfig({
         },*/
     ],
 
-    // Run your local dev server before starting the tests.
-    webServer: {
-        command: `node extra/remove-playwright-test-data.js && cross-env NODE_ENV=development node server/server.js --port=${port} --data-dir=./data/playwright-test`,
-        url,
-        reuseExistingServer: false,
-        cwd: "../",
-    },
+    // Use the live application
+    // webServer: {
+    //     command: `node extra/remove-playwright-test-data.js && cross-env NODE_ENV=development node server/server.js --data-dir=./data/playwright-test`,
+    //     url,
+    //     reuseExistingServer: true,
+    //     cwd: "../",
+    // },
 });

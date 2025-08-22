@@ -1628,8 +1628,25 @@ let needSetup = false;
             await afterLogin(socket, await R.findOne("user"));
             socket.emit("autoLogin");
         } else {
-            socket.emit("loginRequired");
-            log.debug("auth", "need auth");
+            // Allow anonymous access by creating anonymous session automatically
+            log.info("auth", "Allowing anonymous access");
+            try {
+                const AnonymousSession = require("./model/anonymous-session");
+                const userAgent = socket.handshake.headers['user-agent'];
+                const ipAddress = socket.handshake.address;
+
+                const session = await AnonymousSession.create(userAgent, ipAddress);
+                log.info("auth", `Created anonymous session: ${session.session_id}`);
+
+                // Emit anonymous session info to client
+                socket.emit("anonymousSession", {
+                    session_id: session.session_id,
+                    message: "Anonymous session created successfully"
+                });
+            } catch (error) {
+                log.error("auth", `Failed to create anonymous session: ${error.message}`);
+                socket.emit("loginRequired");
+            }
         }
 
     });

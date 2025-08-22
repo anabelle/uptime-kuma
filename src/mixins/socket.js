@@ -107,17 +107,26 @@ export default {
             if (env === "development" && isDevContainer()) {
                 url = protocol + getDevContainerServerHostname();
             } else if (env === "development" || localStorage.dev === "dev") {
+                // Always connect to the backend on port 3001, regardless of frontend port
                 url = protocol + location.hostname + ":3001";
             } else {
                 // Connect to the current url
                 url = undefined;
             }
 
-            socket = io(url);
+            try {
+                socket = io(url);
+                console.log("Attempting to connect to WebSocket:", url);
 
-            socket.on("info", (info) => {
-                this.info = info;
-            });
+                socket.on("info", (info) => {
+                    this.info = info;
+                });
+            } catch (error) {
+                console.error("Failed to initialize WebSocket connection:", error);
+                // Don't break the app if WebSocket fails
+                this.socket.connected = false;
+                this.connectionErrorMsg = `Failed to initialize WebSocket: ${error.message}`;
+            }
 
             socket.on("setup", (monitorID, data) => {
                 this.$router.push("/setup");
@@ -131,11 +140,29 @@ export default {
             });
 
             socket.on("loginRequired", () => {
+                console.log("loginRequired event received");
                 let token = this.storage().token;
+                console.log("Current token:", token);
                 if (token && token !== "autoLogin") {
                     this.loginByToken(token);
                 } else {
-                    this.$root.storage().removeItem("token");
+                    // Try to create anonymous session
+                    console.log("Creating anonymous session...");
+                    this.createAnonymousSession();
+                }
+            });
+
+            socket.on("anonymousSession", (data) => {
+                console.log("anonymousSession event received:", data);
+                if (data.session_id) {
+                    // Store anonymous session ID
+                    localStorage.setItem("anonymous_session_id", data.session_id);
+                    this.loggedIn = true;
+                    this.allowLoginDialog = false;
+                    this.username = "Anonymous";
+                    console.log("Anonymous session created successfully:", data.session_id);
+                } else {
+                    console.error("Failed to create anonymous session:", data);
                     this.allowLoginDialog = true;
                 }
             });
@@ -251,9 +278,8 @@ export default {
             });
 
             socket.on("connect_error", (err) => {
-                console.error(`Failed to connect to the backend. Socket.io connect_error: ${err.message}`);
+                console.error("WebSocket connect_error:", err);
                 this.connectionErrorMsg = `${this.$t("Cannot connect to the socket server.")} [${err}] ${this.$t("Reconnecting...")}`;
-                this.showReverseProxyGuide = true;
                 this.socket.connected = false;
                 this.socket.firstConnect = false;
             });
@@ -276,6 +302,7 @@ export default {
                 }
 
                 this.socket.firstConnect = false;
+                console.log("Socket connected, loggedIn status:", this.loggedIn);
             });
 
             // cloudflared
@@ -433,6 +460,43 @@ export default {
                     this.loggedIn = true;
                     this.username = this.getJWTPayload()?.username;
                 }
+            });
+        },
+
+        /**
+         * Create an anonymous session for dashboard access
+         * @returns {void}
+         */
+        createAnonymousSession() {
+            console.log("Attempting to create anonymous session...");
+            // Make API call to create anonymous session
+            fetch("/api/anonymous-session", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            })
+            .then(response => {
+                console.log("Anonymous session API response status:", response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log("Anonymous session API response data:", data);
+                if (data.session_id) {
+                    // Store anonymous session ID
+                    localStorage.setItem("anonymous_session_id", data.session_id);
+                    this.loggedIn = true;
+                    this.allowLoginDialog = false;
+                    this.username = "Anonymous";
+                    console.log("Anonymous session created successfully:", data.session_id);
+                } else {
+                    console.error("Failed to create anonymous session:", data);
+                    this.allowLoginDialog = true;
+                }
+            })
+            .catch(error => {
+                console.error("Error creating anonymous session:", error);
+                this.allowLoginDialog = true;
             });
         },
 

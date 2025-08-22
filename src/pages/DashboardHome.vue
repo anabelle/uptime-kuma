@@ -5,6 +5,13 @@
                 {{ $t("Quick Stats") }}
             </h1>
 
+            <!-- Credit Balance for Anonymous Users -->
+            <CreditBalance
+                v-if="anonymousSessionId"
+                :session-id="anonymousSessionId"
+                class="mb-4"
+            />
+
             <div class="shadow-box big-padding text-center mb-4">
                 <div class="row">
                     <div class="col">
@@ -89,12 +96,14 @@
 import Status from "../components/Status.vue";
 import Datetime from "../components/Datetime.vue";
 import Pagination from "v-pagination-3";
+import CreditBalance from "../components/CreditBalance.vue";
 
 export default {
     components: {
         Datetime,
         Status,
         Pagination,
+        CreditBalance,
     },
     props: {
         calculatedHeight: {
@@ -114,6 +123,12 @@ export default {
             importantHeartBeatListLength: 0,
             displayedRecords: [],
         };
+    },
+
+    computed: {
+        anonymousSessionId() {
+            return localStorage.getItem('anonymous_session_id');
+        },
     },
     watch: {
         perPage() {

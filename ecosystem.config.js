@@ -13,14 +13,14 @@ module.exports = {
         },
         {
             name: "uptime-kuma-frontend",
-            script: 'npm',
-            args: 'run start-frontend-dev',
+            script: 'npx',
+            args: 'serve -s dist -l 3000',
             instances: 1,
             autorestart: true,
             watch: false,
             max_memory_restart: '1G',
             env: {
-                NODE_ENV: 'development'
+                NODE_ENV: 'production'
             }
         }
     ]
