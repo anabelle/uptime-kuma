@@ -384,6 +384,7 @@ test.describe("Anonymous User Access", () => {
         await expect(page).not.toHaveURL(/.*login.*/);
 
         // Check if we can see dashboard content (more flexible than specific element)
+        await page.waitForTimeout(2000); // Wait for page to fully load
         const dashboardContent = page.locator('body').filter({ hasText: /Dashboard|Monitor|Status/ });
         await expect(dashboardContent).toBeVisible();
 
