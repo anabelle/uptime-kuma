@@ -50,6 +50,13 @@ export default {
             const sessionId = localStorage.getItem('anonymous_session_id');
             if (sessionId) {
                 this.anonymousSessionId = sessionId;
+                // Ensure loggedIn flag is set for existing anonymous sessions
+                if (!this.$root.loggedIn) {
+                    this.$root.loggedIn = true;
+                    this.$root.allowLoginDialog = false;
+                    this.$root.username = "Anonymous";
+                    console.log("Existing anonymous session found and activated:", sessionId);
+                }
             } else {
                 // Create new anonymous session
                 await this.createAnonymousSession();
@@ -69,6 +76,11 @@ export default {
                 if (data.session_id) {
                     this.anonymousSessionId = data.session_id;
                     localStorage.setItem('anonymous_session_id', data.session_id);
+                    // Set loggedIn flag for anonymous users to enable form access
+                    this.$root.loggedIn = true;
+                    this.$root.allowLoginDialog = false;
+                    this.$root.username = "Anonymous";
+                    console.log("Anonymous session created successfully in Dashboard:", data.session_id);
                 }
             } catch (error) {
                 console.error('Failed to create anonymous session:', error);

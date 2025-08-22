@@ -2,6 +2,8 @@
     <transition name="slide-fade" appear>
         <div>
             <h1 class="mb-3">{{ pageName }}</h1>
+
+            <!-- Always show form - no authentication checks -->
             <form @submit.prevent="submit">
                 <div class="shadow-box shadow-box-with-fixed-bottom-bar">
                     <div class="row">
@@ -1371,6 +1373,23 @@ export default {
             return this.$route.path.startsWith("/edit");
         },
 
+        hasAnonymousSession() {
+            // Check if there's an anonymous session in localStorage
+            // This provides a fallback for when $root.loggedIn is not set yet
+            const sessionId = localStorage.getItem('anonymous_session_id');
+            console.log('EditMonitor: hasAnonymousSession check - sessionId:', sessionId);
+            return !!sessionId;
+        },
+
+        isAuthenticated() {
+            // For anonymous users, only check for anonymous session
+            // Don't rely on $root.loggedIn as it might not be set properly
+            const hasSession = this.hasAnonymousSession;
+            const loggedIn = this.$root.loggedIn;
+            console.log('EditMonitor: isAuthenticated check - hasSession:', hasSession, 'loggedIn:', loggedIn);
+            return hasSession;
+        },
+
         pushURL() {
             return this.$root.baseURL + "/api/push/" + this.monitor.pushToken + "?status=up&msg=OK&ping=";
         },
@@ -1896,6 +1915,13 @@ message HealthCheckResponse {
          * @returns {Promise<void>}
          */
         async submit() {
+            // Debug logging
+            console.log("EditMonitor submit called");
+            console.log("$root.loggedIn:", this.$root.loggedIn);
+            console.log("anonymousSessionId:", this.$root.anonymousSessionId);
+            console.log("socket connected:", this.$root.socket?.connected);
+
+            // No authentication checks - allow all users to submit
 
             this.processing = true;
 

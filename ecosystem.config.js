@@ -13,14 +13,14 @@ module.exports = {
         },
         {
             name: "uptime-kuma-frontend",
-            script: 'npx',
-            args: 'serve -s dist -l 3000',
+            script: 'vite',
+            args: '--host --config ./config/vite.config.js',
             instances: 1,
             autorestart: true,
             watch: false,
             max_memory_restart: '1G',
             env: {
-                NODE_ENV: 'production'
+                NODE_ENV: 'development'
             }
         }
     ]

@@ -80,7 +80,13 @@ export function getResBaseURL() {
     if (env === "development" && isDevContainer()) {
         return location.protocol + "//" + getDevContainerServerHostname();
     } else if (env === "development" || localStorage.dev === "dev") {
-        return location.protocol + "//" + location.hostname + ":3001";
+        // Use environment variable if set, otherwise use same host as frontend (for nginx proxy setups)
+        const backendUrl = process.env.UPTIME_KUMA_BACKEND_URL;
+        if (backendUrl) {
+            return backendUrl;
+        } else {
+            return location.protocol + "//" + location.host;
+        }
     } else {
         return "";
     }

@@ -49,6 +49,7 @@ export default {
             dockerHostList: [],
             remoteBrowserList: [],
             statusPageListLoaded: false,
+            anonymousSessionId: localStorage.getItem('anonymous_session_id') || null,
             statusPageList: [],
             proxyList: [],
             connectionErrorMsg: `${this.$t("Cannot connect to the socket server.")} ${this.$t("Reconnecting...")}`,
@@ -66,11 +67,35 @@ export default {
         };
     },
 
-    created() {
-        this.initSocketIO();
-    },
+        created() {
+            this.initAnonymousSession();
+            this.initSocketIO();
+        },
 
-    methods: {
+        methods: {
+
+        /**
+         * Initialize anonymous session from localStorage
+         * @returns {void}
+         */
+        initAnonymousSession() {
+            const sessionId = localStorage.getItem('anonymous_session_id');
+            console.log("initAnonymousSession called, sessionId from localStorage:", sessionId);
+            console.log("Current state - loggedIn:", this.loggedIn, "anonymousSessionId:", this.anonymousSessionId);
+
+            if (sessionId && !this.loggedIn) {
+                console.log("Initializing anonymous session from localStorage:", sessionId);
+                this.anonymousSessionId = sessionId;
+                this.loggedIn = true;
+                this.allowLoginDialog = false;
+                this.username = "Anonymous";
+                console.log("Anonymous session initialized successfully");
+            } else if (sessionId && this.loggedIn) {
+                console.log("Anonymous session already exists in localStorage and user is logged in");
+            } else if (!sessionId) {
+                console.log("No anonymous session found in localStorage");
+            }
+        },
 
         /**
          * Initialize connection to socket server
@@ -100,6 +125,17 @@ export default {
 
             this.socket.initedSocketIO = true;
 
+            // Set a timeout to create anonymous session if WebSocket doesn't connect
+            // Only if we don't already have an anonymous session
+            if (!this.anonymousSessionId && !this.loggedIn) {
+                setTimeout(() => {
+                    if (!this.socket.connected && !this.anonymousSessionId && !this.loggedIn) {
+                        console.log("WebSocket connection timeout, creating anonymous session via API");
+                        this.createAnonymousSession();
+                    }
+                }, 3000); // 3 second timeout
+            }
+
             let protocol = location.protocol + "//";
 
             let url;
@@ -107,8 +143,15 @@ export default {
             if (env === "development" && isDevContainer()) {
                 url = protocol + getDevContainerServerHostname();
             } else if (env === "development" || localStorage.dev === "dev") {
-                // Always connect to the backend on port 3001, regardless of frontend port
-                url = protocol + location.hostname + ":3001";
+                // Check if we should use a specific backend URL or connect to the same host
+                // This allows nginx proxy setups where no port is needed
+                const backendUrl = process.env.UPTIME_KUMA_BACKEND_URL;
+                if (backendUrl) {
+                    url = backendUrl;
+                } else {
+                    // Connect to the same host/port as the frontend (for nginx proxy setups)
+                    url = protocol + location.host;
+                }
             } else {
                 // Connect to the current url
                 url = undefined;
@@ -121,11 +164,61 @@ export default {
                 socket.on("info", (info) => {
                     this.info = info;
                 });
+
+                // Handle WebSocket connection success
+                socket.on("connect", () => {
+                    console.log("WebSocket connected successfully");
+                    this.socket.connected = true;
+                    this.connectionErrorMsg = "";
+                });
+
+                // Handle WebSocket connection failure
+                socket.on("connect_error", (error) => {
+                    console.error("WebSocket connection failed:", error);
+                    this.socket.connected = false;
+                    this.connectionErrorMsg = `Cannot connect to the socket server. ${error.message}`;
+
+                    // If WebSocket fails and no anonymous session exists, try to create one
+                    // But first check localStorage in case it was set by another instance
+                    const existingSessionId = localStorage.getItem('anonymous_session_id');
+                    if (existingSessionId && !this.anonymousSessionId) {
+                        console.log("Found existing anonymous session in localStorage:", existingSessionId);
+                        this.anonymousSessionId = existingSessionId;
+                        this.loggedIn = true;
+                        this.allowLoginDialog = false;
+                        this.username = "Anonymous";
+                    } else if (!this.anonymousSessionId && !this.loggedIn) {
+                        console.log("WebSocket failed, attempting to create anonymous session via API");
+                        this.createAnonymousSession();
+                    }
+                });
+
+                // Handle disconnection
+                socket.on("disconnect", (reason) => {
+                    console.log("WebSocket disconnected:", reason);
+                    this.socket.connected = false;
+                    this.connectionErrorMsg = `WebSocket disconnected: ${reason}`;
+                });
+
             } catch (error) {
                 console.error("Failed to initialize WebSocket connection:", error);
                 // Don't break the app if WebSocket fails
                 this.socket.connected = false;
                 this.connectionErrorMsg = `Failed to initialize WebSocket: ${error.message}`;
+
+                // If WebSocket initialization fails and no anonymous session exists, try to create one
+                // But first check localStorage in case it was set by another instance
+                const existingSessionId = localStorage.getItem('anonymous_session_id');
+                if (existingSessionId && !this.anonymousSessionId) {
+                    console.log("Found existing anonymous session in localStorage:", existingSessionId);
+                    this.anonymousSessionId = existingSessionId;
+                    this.loggedIn = true;
+                    this.allowLoginDialog = false;
+                    this.username = "Anonymous";
+                } else if (!this.anonymousSessionId && !this.loggedIn) {
+                    console.log("WebSocket initialization failed, attempting to create anonymous session via API");
+                    this.createAnonymousSession();
+                }
             }
 
             socket.on("setup", (monitorID, data) => {
@@ -157,6 +250,7 @@ export default {
                 if (data.session_id) {
                     // Store anonymous session ID
                     localStorage.setItem("anonymous_session_id", data.session_id);
+                    this.anonymousSessionId = data.session_id;
                     this.loggedIn = true;
                     this.allowLoginDialog = false;
                     this.username = "Anonymous";
@@ -468,9 +562,34 @@ export default {
          * @returns {void}
          */
         createAnonymousSession() {
-            console.log("Attempting to create anonymous session...");
+            console.log("createAnonymousSession called");
+            console.log("Current state - loggedIn:", this.loggedIn, "anonymousSessionId:", this.anonymousSessionId);
+            console.log("localStorage sessionId:", localStorage.getItem('anonymous_session_id'));
+
+            // Check if we already have an anonymous session
+            const existingSessionId = localStorage.getItem('anonymous_session_id');
+            console.log("Existing session ID in localStorage:", existingSessionId);
+
+            if (existingSessionId && !this.anonymousSessionId) {
+                console.log("Found existing anonymous session, reusing it:", existingSessionId);
+                this.anonymousSessionId = existingSessionId;
+                this.loggedIn = true;
+                this.allowLoginDialog = false;
+                this.username = "Anonymous";
+                return;
+            } else if (existingSessionId && this.anonymousSessionId) {
+                console.log("Anonymous session already exists, not creating new one");
+                return;
+            }
+
             // Make API call to create anonymous session
-            fetch("/api/anonymous-session", {
+            const apiUrl = (process.env.NODE_ENV === "development")
+                ? (process.env.UPTIME_KUMA_BACKEND_URL
+                    ? process.env.UPTIME_KUMA_BACKEND_URL + "/api/anonymous-session"
+                    : location.protocol + "//" + location.host + "/api/anonymous-session")
+                : "/api/anonymous-session";
+
+            fetch(apiUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -478,6 +597,9 @@ export default {
             })
             .then(response => {
                 console.log("Anonymous session API response status:", response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 return response.json();
             })
             .then(data => {
@@ -485,10 +607,16 @@ export default {
                 if (data.session_id) {
                     // Store anonymous session ID
                     localStorage.setItem("anonymous_session_id", data.session_id);
+                    this.anonymousSessionId = data.session_id;
                     this.loggedIn = true;
                     this.allowLoginDialog = false;
                     this.username = "Anonymous";
                     console.log("Anonymous session created successfully:", data.session_id);
+
+                    // Emit event for other components that might be listening
+                    this.emitter.emit('anonymous-session-created', {
+                        session_id: data.session_id
+                    });
                 } else {
                     console.error("Failed to create anonymous session:", data);
                     this.allowLoginDialog = true;
@@ -608,6 +736,10 @@ export default {
          * @returns {void}
          */
         add(monitor, callback) {
+            // Add anonymous session ID for anonymous users
+            if (!this.loggedIn && this.anonymousSessionId) {
+                monitor.anonymousSessionId = this.anonymousSessionId;
+            }
             socket.emit("add", monitor, callback);
         },
 

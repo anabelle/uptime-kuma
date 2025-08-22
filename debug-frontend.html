@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Frontend</title>
+</head>
+<body>
+    <h1>Debug Frontend Issues</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.style.padding = '10px';
+            div.style.margin = '5px';
+            div.style.borderRadius = '5px';
+
+            if (type === 'error') {
+                div.style.backgroundColor = '#f8d7da';
+                div.style.color = '#721c24';
+            } else if (type === 'success') {
+                div.style.backgroundColor = '#d4edda';
+                div.style.color = '#155724';
+            } else {
+                div.style.backgroundColor = '#d1ecf1';
+                div.style.color = '#0c5460';
+            }
+
+            div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        async function testFrontend() {
+            try {
+                log('Testing frontend connectivity...');
+
+                // Test basic page load
+                const response = await fetch('http://localhost:3000/');
+                if (response.ok) {
+                    log('✅ Frontend is responding', 'success');
+                } else {
+                    log(`❌ Frontend error: ${response.status}`, 'error');
+                    return;
+                }
+
+                // Test /add route
+                const addResponse = await fetch('http://localhost:3000/add');
+                if (addResponse.ok) {
+                    log('✅ /add route is responding', 'success');
+                } else {
+                    log(`❌ /add route error: ${addResponse.status}`, 'error');
+                }
+
+                // Test API endpoint
+                const apiResponse = await fetch('http://localhost:3001/api/anonymous-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                if (apiResponse.ok) {
+                    const data = await apiResponse.json();
+                    log(`✅ API working: ${data.message}`, 'success');
+                } else {
+                    log(`❌ API error: ${apiResponse.status}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Run tests on page load
+        window.addEventListener('load', () => {
+            log('Page loaded, starting tests...');
+            testFrontend();
+        });
+
+        // Also test immediately
+        testFrontend();
+    </script>
+</body>
+</html>

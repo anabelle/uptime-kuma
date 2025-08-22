@@ -7,7 +7,13 @@ const env = process.env.NODE_ENV || "production";
 if (env === "development" && isDevContainer()) {
     axios.defaults.baseURL = location.protocol + "//" + getDevContainerServerHostname();
 } else if (env === "development" || localStorage.dev === "dev") {
-    axios.defaults.baseURL = location.protocol + "//" + location.hostname + ":3001";
+    // Use environment variable if set, otherwise use same host as frontend (for nginx proxy setups)
+    const backendUrl = process.env.UPTIME_KUMA_BACKEND_URL;
+    if (backendUrl) {
+        axios.defaults.baseURL = backendUrl;
+    } else {
+        axios.defaults.baseURL = location.protocol + "//" + location.host;
+    }
 }
 
 export default {

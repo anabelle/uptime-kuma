@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Anonymous Session</title>
+</head>
+<body>
+    <h1>Testing Anonymous Session Creation</h1>
+    <p>Open browser console to see debug logs</p>
+    <button onclick="testAddRoute()">Test /add Route</button>
+    <button onclick="clearStorage()">Clear localStorage</button>
+    <button onclick="testAnonymousSessionAPI()">Test Anonymous Session API</button>
+
+    <script>
+        function testAddRoute() {
+            console.log("Navigating to /add route...");
+            window.location.href = "http://localhost:3000/add";
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('anonymous_session_id');
+            console.log("Cleared anonymous session from localStorage");
+        }
+
+        function testAnonymousSessionAPI() {
+            console.log("Testing anonymous session API...");
+            fetch('http://localhost:3001/api/anonymous-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('API Response:', data);
+                if (data.session_id) {
+                    localStorage.setItem('anonymous_session_id', data.session_id);
+                    console.log('Session saved to localStorage:', data.session_id);
+                }
+            })
+            .catch(error => console.error('API Error:', error));
+        }
+
+        // Add some debugging
+        console.log("Current localStorage:", localStorage.getItem('anonymous_session_id'));
+    </script>
+</body>
+</html>

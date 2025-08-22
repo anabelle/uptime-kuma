@@ -792,15 +792,62 @@ exports.allowAllOrigin = (res) => {
 };
 
 /**
- * Check if a user is logged in
+ * Check if a user is logged in (allows anonymous users with sessions)
  * @param {Socket} socket Socket instance
  * @returns {void}
  * @throws The user is not logged in
  */
-exports.checkLogin = (socket) => {
-    if (!socket.userID) {
-        throw new Error("You are not logged in.");
+exports.checkLogin = async (socket) => {
+    // Allow logged in users
+    if (socket.userID) {
+        return;
     }
+
+    // Allow anonymous users with valid sessions
+    if (socket.anonymousSessionId) {
+        try {
+            const AnonymousSession = require("./model/anonymous-session");
+            const session = await AnonymousSession.findBySessionId(socket.anonymousSessionId);
+            if (session) {
+                return; // Valid anonymous session
+            }
+        } catch (error) {
+            // Log error but continue to throw
+            console.error("Error checking anonymous session:", error);
+        }
+    }
+
+    // No valid authentication found
+    throw new Error("You are not logged in.");
+};
+
+/**
+ * Check if user is authenticated (allows anonymous users with sessions)
+ * @param {Socket} socket Socket.io instance
+ * @returns {Promise<boolean>} True if authenticated (logged in or anonymous with session)
+ */
+exports.checkAuth = async (socket) => {
+    if (socket.userID) {
+        return true; // Logged in user
+    }
+
+    // Check for anonymous session
+    if (socket.anonymousSessionId) {
+        const AnonymousSession = require("./model/anonymous-session");
+        const session = await AnonymousSession.findBySessionId(socket.anonymousSessionId);
+        return session !== null;
+    }
+
+    return false;
+};
+
+/**
+ * Get user identifier (userID or anonymous session ID)
+ * @param {Socket} socket Socket.io instance
+ * @returns {string|null} User identifier
+ */
+exports.getUserIdentifier = (socket) => {
+    return socket.userID || socket.anonymousSessionId || null;
 };
 
 /**

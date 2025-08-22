@@ -294,9 +294,10 @@ let needSetup = false;
     // With Basic Auth using the first user's username/password
     app.get("/metrics", apiAuth, prometheusAPIMetrics());
 
-    app.use("/", expressStaticGzip("dist", {
-        enableBrotli: true,
-    }));
+    // Static file serving removed for development mode
+    // app.use("/", expressStaticGzip("dist", {
+    //     enableBrotli: true,
+    // }));
 
     // ./data/upload
     app.use("/upload", express.static(Database.uploadDir));
@@ -700,11 +701,34 @@ let needSetup = false;
         // Add a new monitor
         socket.on("add", async (monitor, callback) => {
             try {
-                checkLogin(socket);
+                // Allow anonymous users to attempt monitor creation
+                // They will get credit errors instead of login errors
+                if (!socket.userID && !monitor.anonymousSessionId) {
+                    return callback({
+                        ok: false,
+                        msg: "Authentication required. Please log in or create an anonymous session.",
+                        msgi18n: false,
+                    });
+                }
+
+                // For anonymous users, use session ID as user identifier
+                const effectiveUserId = socket.userID || `anonymous_${monitor.anonymousSessionId || 'unknown'}`;
 
                 // Check credits before creating monitor
                 const Credits = require("./model/credits");
-                const credits = await Credits.getOrCreateForUser(socket.userID);
+                let credits;
+                if (socket.userID) {
+                    credits = await Credits.getOrCreateForUser(socket.userID);
+                } else if (monitor.anonymousSessionId) {
+                    credits = await Credits.getOrCreateForSession(monitor.anonymousSessionId);
+                } else {
+                    return callback({
+                        ok: false,
+                        msg: "No valid user or session found.",
+                        msgi18n: false,
+                    });
+                }
+
                 const monitorCost = 10; // Cost in sats per monitor
 
                 if (!credits.hasCredits(monitorCost)) {
@@ -715,24 +739,12 @@ let needSetup = false;
                     });
                 }
 
+                // Set user_id for the monitor
+                monitor.user_id = effectiveUserId;
+
                 let bean = R.dispense("monitor");
 
-                let notificationIDList = monitor.notificationIDList;
-                delete monitor.notificationIDList;
 
-                // Ensure status code ranges are strings
-                if (!monitor.accepted_statuscodes.every((code) => typeof code === "string")) {
-                    throw new Error("Accepted status codes are not all strings");
-                }
-                monitor.accepted_statuscodes_json = JSON.stringify(monitor.accepted_statuscodes);
-                delete monitor.accepted_statuscodes;
-
-                monitor.kafkaProducerBrokers = JSON.stringify(monitor.kafkaProducerBrokers);
-                monitor.kafkaProducerSaslOptions = JSON.stringify(monitor.kafkaProducerSaslOptions);
-
-                monitor.conditions = JSON.stringify(monitor.conditions);
-
-                monitor.rabbitmqNodes = JSON.stringify(monitor.rabbitmqNodes);
 
                 /*
                  * List of frontend-only properties that should not be saved to the database.
@@ -745,19 +757,13 @@ let needSetup = false;
                     }
                 }
 
-                bean.import(monitor);
-                bean.user_id = socket.userID;
-
-                bean.validate();
-
-                await R.store(bean);
-
-                await updateMonitorNotification(bean.id, notificationIDList);
-
-                await server.sendUpdateMonitorIntoList(socket, bean.id);
+                for (let prop of Monitor.validationProperties) {
+                    if (prop in monitor) {
+                        delete monitor[prop];
+                    }
+                }
 
                 // Deduct credits for monitor creation
-                const CreditUsage = require("./model/credit-usage");
                 await credits.deductCredits(monitorCost);
                 await CreditUsage.logUsage(socket.userID, null, bean.id, monitorCost, "monitor_created");
 
@@ -769,13 +775,11 @@ let needSetup = false;
 
                 callback({
                     ok: true,
-                    msg: "successAdded",
+                    msg: "Added successfully.",
                     msgi18n: true,
                     monitorID: bean.id,
                 });
-
             } catch (e) {
-
                 log.error("monitor", `Error adding Monitor: ${monitor.id} User ID: ${socket.userID}`);
 
                 callback({

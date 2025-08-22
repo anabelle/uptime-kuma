@@ -21,17 +21,17 @@
             </a>
 
             <ul class="nav nav-pills">
-                <li v-if="$root.loggedIn" class="nav-item me-2">
+                <li class="nav-item me-2">
                     <router-link to="/manage-status-page" class="nav-link">
                         <font-awesome-icon icon="stream" /> {{ $t("Status Pages") }}
                     </router-link>
                 </li>
-                <li v-if="$root.loggedIn" class="nav-item me-2">
+                <li class="nav-item me-2">
                     <router-link to="/dashboard" class="nav-link">
                         <font-awesome-icon icon="tachometer-alt" /> {{ $t("Dashboard") }}
                     </router-link>
                 </li>
-                <li v-if="$root.loggedIn" class="nav-item">
+                <li class="nav-item">
                     <div class="dropdown dropdown-profile-pic">
                         <div class="nav-link" data-bs-toggle="dropdown">
                             <div class="profile-pic">{{ $root.usernameFirstChar }}</div>
@@ -69,7 +69,7 @@
                                 </a>
                             </li>
 
-                            <li v-if="$root.loggedIn && $root.socket.token !== 'autoLogin'">
+                            <li>
                                 <button class="dropdown-item" @click="$root.logout">
                                     <font-awesome-icon icon="sign-out-alt" />
                                     {{ $t("Logout") }}
@@ -90,13 +90,13 @@
         </header>
 
         <main>
-            <router-view v-if="$root.loggedIn" />
-            <Login v-if="! $root.loggedIn && $root.allowLoginDialog" />
+             <!-- Always show router-view - no authentication checks -->
+             <router-view />
         </main>
 
         <!-- Mobile Only -->
         <div v-if="$root.isMobile" style="width: 100%; height: calc(60px + env(safe-area-inset-bottom));" />
-        <nav v-if="$root.isMobile && $root.loggedIn" class="bottom-nav">
+        <nav v-if="$root.isMobile" class="bottom-nav">
             <router-link to="/dashboard" class="nav-link">
                 <div><font-awesome-icon icon="tachometer-alt" /></div>
                 {{ $t("Home") }}
@@ -165,6 +165,13 @@ export default {
             } else {
                 return false;
             }
+        },
+
+        hasAnonymousSession() {
+            // Check if there's an anonymous session in localStorage
+            const sessionId = localStorage.getItem('anonymous_session_id');
+            console.log('Layout: hasAnonymousSession check - sessionId:', sessionId);
+            return !!sessionId;
         },
 
     },
