@@ -33,9 +33,8 @@ test.describe("Anonymous Credit System", () => {
         console.log('Credit balance component exists:', creditBalanceExists);
 
         if (creditBalanceExists) {
-            // If it exists, check if it's visible (use first element to avoid strict mode issues)
-            const firstCreditBalance = creditBalance.first();
-            const isVisible = await firstCreditBalance.isVisible();
+            // If it exists, check if it's visible
+            const isVisible = await creditBalance.isVisible();
             console.log('Credit balance component is visible:', isVisible);
 
             if (isVisible) {

@@ -674,8 +674,8 @@ router.get("/api/credits/balance", async (request, response) => {
             const AnonymousSession = require("../model/anonymous-session");
             const session = await AnonymousSession.findBySessionId(sessionId);
             if (session) {
-                balance = await session.getBalance();
-                await session.updateLastActive();
+                balance = await AnonymousSession.getBalance(session);
+                await AnonymousSession.updateLastActive(session);
             }
         } else if (userId) {
             const Credits = require("../model/credits");
@@ -817,10 +817,11 @@ router.get("/api/credits/history", async (request, response) => {
         let history = [];
 
         if (sessionId) {
-            const session = await require("../model/anonymous-session").findBySessionId(sessionId);
+            const AnonymousSession = require("../model/anonymous-session");
+            const session = await AnonymousSession.findBySessionId(sessionId);
             if (session) {
                 history = await CreditUsage.getSessionHistory(session.id, limit);
-                await session.updateLastActive();
+                await AnonymousSession.updateLastActive(session);
             }
         } else if (userId) {
             history = await CreditUsage.getUserHistory(userId, limit);

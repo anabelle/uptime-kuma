@@ -52,10 +52,21 @@ app.component("FontAwesomeIcon", FontAwesomeIcon);
 app.mount("#app");
 
 // Expose the vue instance globally for WebSocket access
-window.UptimeKuma = app._instance.proxy;
+// Use setTimeout to ensure the instance is available after mount
+setTimeout(() => {
+    if (app._instance && app._instance.proxy) {
+        window.UptimeKuma = app._instance.proxy;
+    } else {
+        console.warn("Vue instance not available for UptimeKuma global");
+    }
+}, 0);
 
 // Expose the vue instance for development
 if (process.env.NODE_ENV === "development") {
-    console.log("Dev Only: window.app is the vue instance");
-    window.app = app._instance;
+    setTimeout(() => {
+        if (app._instance) {
+            console.log("Dev Only: window.app is the vue instance");
+            window.app = app._instance;
+        }
+    }, 0);
 }

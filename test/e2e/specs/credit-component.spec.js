@@ -4,7 +4,7 @@ import { screenshot } from "../util-test";
 test.describe("Credit Balance Component", () => {
 
     test("should show credit balance component in dashboard", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("/dashboard");
         await page.waitForLoadState('networkidle');
 
         // This test will initially fail - demonstrating what we want to implement
@@ -35,7 +35,7 @@ test.describe("Credit Balance Component", () => {
     });
 
     test("should show credit balance for anonymous users", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("/dashboard");
         await page.waitForLoadState('networkidle');
 
         // Should have created an anonymous session
@@ -63,7 +63,7 @@ test.describe("Credit Balance Component", () => {
     });
 
     test("should allow adding credits", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("/dashboard");
         await page.waitForLoadState('networkidle');
 
         // Click "Add Credits" button
