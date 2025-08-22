@@ -5,7 +5,7 @@ test.describe("Anonymous Credit System", () => {
 
     test("should access dashboard as anonymous user", async ({ page }, testInfo) => {
         // Navigate to dashboard
-        await page.goto("./dashboard");
+        await page.goto("https://vm-522.lnvps.cloud/dashboard");
 
         // Should load dashboard page
         await expect(page).toHaveURL(/.*dashboard.*/);
@@ -21,7 +21,7 @@ test.describe("Anonymous Credit System", () => {
     });
 
     test("should show credit balance component for anonymous users", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("https://vm-522.lnvps.cloud/dashboard");
 
         // Wait for page to load
         await page.waitForLoadState('networkidle');
@@ -33,8 +33,9 @@ test.describe("Anonymous Credit System", () => {
         console.log('Credit balance component exists:', creditBalanceExists);
 
         if (creditBalanceExists) {
-            // If it exists, check if it's visible
-            const isVisible = await creditBalance.isVisible();
+            // If it exists, check if it's visible (use first element to avoid strict mode issues)
+            const firstCreditBalance = creditBalance.first();
+            const isVisible = await firstCreditBalance.isVisible();
             console.log('Credit balance component is visible:', isVisible);
 
             if (isVisible) {
@@ -60,7 +61,7 @@ test.describe("Anonymous Credit System", () => {
     });
 
     test("should create anonymous session", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("https://vm-522.lnvps.cloud/dashboard");
         await page.waitForLoadState('networkidle');
 
         // Wait a bit for any JavaScript to execute
@@ -84,7 +85,7 @@ test.describe("Anonymous Credit System", () => {
     });
 
     test("should handle credit API calls", async ({ page }, testInfo) => {
-        await page.goto("./dashboard");
+        await page.goto("https://vm-522.lnvps.cloud/dashboard");
         await page.waitForLoadState('networkidle');
 
         // Listen for API calls
